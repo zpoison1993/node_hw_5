@@ -4,6 +4,7 @@ const app = express()
 const http = require('http')
 const server = http.createServer(app)
 require('dotenv').config()
+const io = require('socket.io').listen(server)
 
 app.use(express.json())
 app.use(express.urlencoded({ extended: false }))
@@ -45,3 +46,79 @@ const PORT = process.env.PORT || 3000
 server.listen(PORT, function () {
     console.log(`Server running. Use our API on port: ${PORT}`)
 })
+const connectedUsers = {}
+const historyMessage = {}
+
+io.on('connection', (socket) => {
+    const socketId = socket.id
+
+  socket.on('users:connect', (data) => {
+      const user = {...data, activeRoom: null, socketId }
+
+    connectedUsers[socketId] = user
+
+    socket.emit('users:list', Object.values(connectedUsers))
+      socket.broadcast.emit('users:add', user)
+  })
+    socket.on('message:add', (data) => {
+        const {senderId, recipientId, roomId } = data
+
+    socket.emit('message:add', data)
+        socket.broadcast.to(roomId).emit('message:add', data)
+        addMessageHistory(senderId, recipientId, data)
+        if (senderId !== recipientId) {
+            addMessageHistory(recipientId, senderId, data)
+        }
+    })
+    socket.on('message:history', (data) => {
+        if (historyMessage[data.userId] && historyMessage[data.userId][data.recipientId]) {
+            socket.emit('message:history', historyMessage[data.userId][data.recipientId])
+        }
+    })
+    socket.on('disconnect', () => {
+        delete connectedUsers[socketId]
+
+    socket.broadcast.emit('users:leave', socketId)
+    })
+})
+
+function addMessageHistory(senderId, recipientId, data) {
+    if (historyMessage[senderId]) {
+        if (historyMessage[senderId][recipientId]) {
+            historyMessage[senderId][recipientId].push(data)
+        } else {
+            historyMessage[senderId][recipientId] = []
+            historyMessage[senderId][recipientId].push(data)
+        }
+    } else {
+        historyMessage[senderId] = {}
+        historyMessage[senderId][recipientId] = []
+        historyMessage[senderId][recipientId].push(data)
+    }
+}
+
+// {
+//   senderId: {
+//     recipientId: ['sdsdsd', 'sdsd'],
+//     recipientId: ['sdsdsd', 'sdsd']
+//   }
+// }
+
+//connection
+//users:connect
+//--users:list
+//--users:add
+//message:add
+//message:history
+//disconnect
+
+/*
+{ #socketId: {
+  username: #username,
+  socketId: #socketId,
+  userId: #userId,
+  activeRoom: null // По умолчанию
+  },
+  ...
+}
+*/
