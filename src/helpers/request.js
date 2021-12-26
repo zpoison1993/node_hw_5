@@ -18,7 +18,7 @@ const request = ({
   dispatch = () => {}
 }) =>
   new Promise((resolve, reject) => {
-    
+
     const {
       accessToken,
       accessTokenExpiredAt,

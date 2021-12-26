@@ -1,53 +1,47 @@
-const dotenv = require('dotenv')
-dotenv.config()
-const createError = require('http-errors')
 const express = require('express')
 const path = require('path')
-const logger = require('morgan')
-const mainRouter = require('./routes/')
-
 const app = express()
-const port = process.env.PORT || '3006'
-const db = require(path.join(__dirname,'./db'))
-db.authenticate()
-    .then(() => {
-        console.log('Connection has been established successfully')
-    })
-    .catch(console.error)
-
-// view engine setup
-app.set('views', path.join(process.cwd(),'./build'))
-app.set('view engine', 'html')
-
-process.env.NODE_ENV === 'development'
-  ? app.use(logger('dev'))
-  : app.use(logger('short'))
+const http = require('http')
+const server = http.createServer(app)
+require('dotenv').config()
 
 app.use(express.json())
-app.use(express.urlencoded( { extended: false } ))
+app.use(express.urlencoded({ extended: false }))
 
-app.use(express.static(path.join(process.cwd(),'build')))
-// app.use('/', mainRouter)
+app.use(function (_, res, next) {
+    res.header('Access-Control-Allow-Origin', '*')
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE')
+    res.header(
+        'Access-Control-Allow-Headers',
+        'Origin, X-Requested-With, Content-Type, Accept',
+    )
+    next()
+})
+
+app.use(express.static(path.join(process.cwd(), 'build')))
+app.use(express.static(path.join(process.cwd(), 'upload')))
+
+require('./models/connection')
+require('./auth/passport')
+
 app.use('/api', require('./routes'))
+
 app.use('*', (_req, res) => {
-    const file = path.resolve(__dirname, 'build', 'index.html')
+    const file = path.resolve(process.cwd(), 'build', 'index.html')
+
     res.sendFile(file)
 })
 
-app.use((req, __, next) => {
-    next(
-        createError(404, `Sorry, nothing is found at ${req.url}`)
-    )
+app.use((err, _, res, __) => {
+    console.log(err.stack)
+    res.status(500).json({
+        code: 500,
+        message: err.message,
+    })
 })
 
-app.use((err,req,res) => {
-    // set locals, only providing error in development
-    res.locals.message = err.message
-    res.locals.error = req.app.get('env') === 'development' ? err : {}
+const PORT = process.env.PORT || 3000
 
-    // render the error page
-    res.status(err.status || 500)
-    res.render('error')
+server.listen(PORT, function () {
+    console.log(`Server running. Use our API on port: ${PORT}`)
 })
-
-app.listen(port, () => {console.log('here we go again', process.cwd())})
